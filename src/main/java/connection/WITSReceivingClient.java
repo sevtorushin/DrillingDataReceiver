@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public class WITSReceivingClient extends AbstractClient {
-    private final int DEFAULT_BUFFER_SIZE = 256;
+    private final int DEFAULT_BUFFER_SIZE = 512;
 
     public WITSReceivingClient(String hostName, int port) throws IOException {
         super(hostName, port);
@@ -17,7 +17,7 @@ public class WITSReceivingClient extends AbstractClient {
             int count = 0;
             while (true) {
                 byte b = (byte) getInpStrm().read();
-                if (b!=33){
+                if (b != 33) {
                     buf[count] = b;
                     count++;
                 } else {

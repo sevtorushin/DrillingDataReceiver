@@ -2,12 +2,20 @@ import connection.SIBReceiverServer;
 import connection.TransferClient;
 import connection.WITSReceivingClient;
 import entity.SIBParameter;
+import entity.WITSPackage;
+import entity.WITSPackageTimeBased;
+import exceptions.BuildObjectException;
 import exceptions.DisconnectedException;
 import service.SIBConverter;
 import service.SIBStreamEmulator;
+import service.WITSConverter;
+import service.WITSStreamEmulator;
 
 import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public class Main {
@@ -33,19 +41,51 @@ public class Main {
 //            e.printStackTrace();
 //        }
 //----------------------------------------------------------------------------------------------
+        //Трансляция сервером дампа WITS из бинарного файла
+//        WITSStreamEmulator emulator = new WITSStreamEmulator(new File("E:\\Documents\\Java_Projects\\DrillingDataReceiver\\src\\main\\resources\\dumps\\witsDump.bin"));
+//        Socket socket = null;
+//        OutputStream os = null;
+//        while (true) {
+//            try (ServerSocket serverSocket = new ServerSocket(5000)) {
+//                socket = serverSocket.accept();
+//                os = socket.getOutputStream();
+//                byte[] b;
+//                while (true) {
+//                    try {
+//                        b = emulator.buildBinaryObject();
+//                        os.write(b);
+//                        try {
+//                            Thread.sleep(10);
+//                        } catch (InterruptedException e) {
+//                            e.printStackTrace();
+//                        }
+//                    } catch (BuildObjectException e) {
+//                        System.err.println(e.getMessage());
+//                        break;
+//                    }
+//                }
+//            } finally {
+//                if (os != null)
+//                    os.close();
+//                if (socket != null)
+//                    socket.close();
+//            }
+//        }
+
+//----------------------------------------------------------------------------------------------
 //        Сборка объекта пакета №1 WITS
-//        WITSReceivingClient client = new WITSReceivingClient("192.168.0.100", 5050);
+//        WITSReceivingClient client = new WITSReceivingClient("127.0.0.1", 5000);
 //        WITSConverter converter = new WITSConverter();
-//        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("e:\\witsObjectData.bin"));
+////        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("e:\\witsObjectData.bin"));
 ////        BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream("e:\\witsBinaryData.bin"));
 //        byte[] bytes;
 //        while (true) {
 //            bytes = client.receiveBytes();
 //            WITSPackageTimeBased packageTimeBased = (WITSPackageTimeBased) converter.convert(bytes, WITSPackageTimeBased.class);
-//            System.out.println(Arrays.toString(bytes));
+////            System.out.println(Arrays.toString(bytes));
 //            System.out.println(packageTimeBased);
-//            oos.writeObject(packageTimeBased);
-//            oos.flush();
+////            oos.writeObject(packageTimeBased);
+////            oos.flush();
 ////            bos.write(bytes);
 ////            bos.flush();
 //        }
@@ -61,20 +101,36 @@ public class Main {
 //        }
 
 //----------------------------------------------------------------------------------------------
+        //Чтение байтов WITS из файла, конвертация в объекты и печать в консоль
+//        WITSStreamEmulator emulator = new WITSStreamEmulator(new File("E:\\Documents\\Java_Projects\\DrillingDataReceiver\\src\\main\\resources\\dumps\\witsDump.bin"));
+//        WITSConverter converter = new WITSConverter();
+//        byte[] b;
+//        WITSPackage witsPackage;
+//        while (true) {
+//            try {
+//                b = emulator.buildBinaryObject();
+//            } catch (BuildObjectException e) {
+//                System.err.println(e.getMessage());
+//                break;
+//            }
+//            witsPackage = converter.convert(b, WITSPackageTimeBased.class);
+//            System.out.println(witsPackage);
+//        }
+//----------------------------------------------------------------------------------------------
         //Прием данных из SR, конвертация в объект и печать в консоль
-        try(SIBReceiverServer srv = new SIBReceiverServer(5000)) {
-            SIBConverter converter = new SIBConverter();
-            while (true) {
-                byte[] data = srv.receiveBytes();
-                    SIBParameter parameter = converter.convert(data, SIBParameter.class);
-                    System.out.println(parameter);
-            }
-        } catch (DisconnectedException e){
-            System.out.println(e.getMessage());
-        }
-        catch (IOException e){
-            e.printStackTrace();
-        }
+//        try(SIBReceiverServer srv = new SIBReceiverServer(5000)) {
+//            SIBConverter converter = new SIBConverter();
+//            while (true) {
+//                byte[] data = srv.receiveBytes();
+//                    SIBParameter parameter = converter.convert(data, SIBParameter.class);
+//                    System.out.println(parameter);
+//            }
+//        } catch (DisconnectedException e){
+//            System.out.println(e.getMessage());
+//        }
+//        catch (IOException e){
+//            e.printStackTrace();
+//        }
 //---------------------------------------------------------------------------------------------
         //Прием данных из SR и запись байтов в бинарный файл
 //        SIBReceiverServer srv = new SIBReceiverServer(5111);
