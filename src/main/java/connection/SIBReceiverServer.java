@@ -1,11 +1,13 @@
 package connection;
 
+import exceptions.DisconnectedException;
+
 import java.io.IOException;
 
 public class SIBReceiverServer extends AbstractServer{
     private final int DEFAULT_BUFFER_SIZE = 44;
 
-    public SIBReceiverServer(int port) throws IOException {
+    public SIBReceiverServer(int port) throws IOException, DisconnectedException {
         super(port);
         buf = new byte[DEFAULT_BUFFER_SIZE];
         receiveBytes();

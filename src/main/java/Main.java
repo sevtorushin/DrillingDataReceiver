@@ -1,22 +1,28 @@
 import connection.SIBReceiverServer;
+import connection.TransferClient;
 import connection.WITSReceivingClient;
+import entity.SIBParameter;
+import exceptions.DisconnectedException;
 import service.SIBConverter;
+import service.SIBStreamEmulator;
 
 import java.io.*;
+import java.net.UnknownHostException;
+import java.util.Arrays;
 
 public class Main {
 
     public static void main(String[] args) throws IOException {
         //Трансляция клиентом дампа SR из бинарного файла----------------------------------------
 //        try(TransferClient client = new TransferClient("localhost", 5000)) {
-//            SIBStreamEmulator emulator = new SIBStreamEmulator(new File("E:\\data1.bin"));
+//            SIBStreamEmulator emulator = new SIBStreamEmulator(new File("E:\\Documents\\Java_Projects\\DrillingDataReceiver\\src\\main\\resources\\dumps\\sibDump.bin"));
 //            OutputStream os = client.getOutputStreamToServer();
 //            byte[] b;
-//            for (int i = 0; i < 12; i++) {
+//            for (int i = 0; i < 5; i++) {
 //                b = emulator.buildBinaryObject();
 //                os.write(b);
 //                try {
-//                    Thread.sleep(5000);
+//                    Thread.sleep(3000);
 //                } catch (InterruptedException e) {
 //                    e.printStackTrace();
 //                }
@@ -56,17 +62,19 @@ public class Main {
 
 //----------------------------------------------------------------------------------------------
         //Прием данных из SR, конвертация в объект и печать в консоль
-//        try(SIBReceiverServer srv = new SIBReceiverServer(5111)) {
-//            SIBConverter converter = new SIBConverter();
-//            while (true) {
-//                byte[] data = srv.receiveBytes();
-//                SIBParameter parameter = converter.convert(data, SIBParameter.class);
-//            System.out.println(Arrays.toString(b));
-//                System.out.println(parameter);
-//            }
-//        } catch (IOException e){
-//            e.printStackTrace();
-//        }
+        try(SIBReceiverServer srv = new SIBReceiverServer(5000)) {
+            SIBConverter converter = new SIBConverter();
+            while (true) {
+                byte[] data = srv.receiveBytes();
+                    SIBParameter parameter = converter.convert(data, SIBParameter.class);
+                    System.out.println(parameter);
+            }
+        } catch (DisconnectedException e){
+            System.out.println(e.getMessage());
+        }
+        catch (IOException e){
+            e.printStackTrace();
+        }
 //---------------------------------------------------------------------------------------------
         //Прием данных из SR и запись байтов в бинарный файл
 //        SIBReceiverServer srv = new SIBReceiverServer(5111);
