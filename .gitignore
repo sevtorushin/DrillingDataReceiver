@@ -1,0 +1,14 @@
+### IntelliJ IDEA ###
+
+.idea
+*.iws
+*.iml
+
+/out
+/test
+/target
+
+WITSRandomGenerator.java
+/src/main/resources/sibExample.db
+/src/main/resources/database/
+/src/main/java/META-INF/
