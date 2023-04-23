@@ -15,7 +15,6 @@ import services.WITSParameterRepository;
 import utils.HibernateUtils;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Properties;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
@@ -41,7 +40,6 @@ public class Main {
             log.debug("SessionFactory is created");
             Runnable storeFromSR = () -> storeSIBData(sessionFactory);
             Runnable storeFromWITS = () -> storeWITSData(sessionFactory);
-//            Runnable retrieveFromWITS = () -> retrieveData(sessionFactory);
 
             ExecutorService executorService = Executors.newFixedThreadPool(2);
             if (isWriteSibData)
@@ -102,41 +100,42 @@ public class Main {
         log.debug("WITS data recording started");
         WITSParameterRepository repository = new WITSParameterRepository(sessionFactory);
         WITSConverter converter = new WITSConverter();
-        try (WITSReceivingClient client = new WITSReceivingClient(witsServerIP, witsServerPort)) {
-            log.debug("Client connected to server " + witsServerIP + " on port " + witsServerPort);
-            validateWITSData(client.receiveBytes());
-            byte[] data;
-            while (true) {
-                data = client.receiveBytes();
-                WITSPackageTimeBased packageTimeBased = (WITSPackageTimeBased) converter
-                        .convert(data, WITSPackageTimeBased.class);
-                WITSParameterEntity p1 = new WITSParameterEntity(
-                        packageTimeBased.getWitsDate(), packageTimeBased.getWitsTime(),
-                        packageTimeBased.getBlockPosition(), packageTimeBased.getBitDepth(),
-                        packageTimeBased.getDepth(), packageTimeBased.getHookLoad(),
-                        packageTimeBased.getPressure());
-                lock.lock();
-                repository.save(p1);
-                log.debug("WITS record saved");
-                lock.unlock();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-            log.error("WITS server input stream read error", e);
-        }
-    }
-
-    public static void retrieveData(SessionFactory sessionFactory) {
-        WITSParameterRepository repository = new WITSParameterRepository(sessionFactory);
-        List<WITSParameterEntity> entities;
         while (true) {
-            try {
-                synchronized (Main.class) {
-                    entities = repository.getAll();
+            try (WITSReceivingClient client = new WITSReceivingClient(witsServerIP, witsServerPort)) {
+                log.debug("Client connected to server " + witsServerIP + " on port " + witsServerPort);
+                validateWITSData(client.receiveBytes());
+                byte[] data;
+                while (true) {
+                    try {
+                        data = client.receiveBytes();
+                        WITSPackageTimeBased packageTimeBased = (WITSPackageTimeBased) converter
+                                .convert(data, WITSPackageTimeBased.class);
+                        WITSParameterEntity p1 = new WITSParameterEntity(
+                                packageTimeBased.getWitsDate(), packageTimeBased.getWitsTime(),
+                                packageTimeBased.getBlockPosition(), packageTimeBased.getBitDepth(),
+                                packageTimeBased.getDepth(), packageTimeBased.getHookLoad(),
+                                packageTimeBased.getPressure());
+                        lock.lock();
+                        repository.save(p1);
+                        log.debug("WITS record saved");
+                        lock.unlock();
+                    } catch (DisconnectedException e) {
+                        log.debug(e);
+                        log.debug("Try reconnect...");
+                        break;
+                    }
                 }
-                System.out.println(entities.size());
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+                log.error("WITS server input stream read error", e);
+            } catch (Exception e) {
+                log.debug("Try reconnect...");
+            } catch (DisconnectedException e) {
                 e.printStackTrace();
             }
         }
