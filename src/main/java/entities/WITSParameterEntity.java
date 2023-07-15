@@ -1,21 +1,24 @@
 package entities;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import utils.DateConverter;
+import utils.DateTimeConverter;
+import utils.TimeConverter;
 
 import javax.persistence.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 
 @Entity
 @Table(name = "WITSData" , schema = "sib")
 @Data
 @NoArgsConstructor
-public class WITSParameterEntity {
+@EqualsAndHashCode(callSuper = false)
+public class WITSParameterEntity extends ParameterEntity{
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -23,17 +26,19 @@ public class WITSParameterEntity {
     private Long id;
 
     @CreationTimestamp
-    @Convert(converter = DateConverter.class)
+    @Convert(converter = DateTimeConverter.class)
     @Column(name = "local_date_time", nullable = false)
     private LocalDateTime localDateTime;
 
     @Basic
+    @Convert(converter = DateConverter.class)
     @Column(name = "witsDate", nullable = false)
-    private String witsDate;
+    private LocalDate witsDate;
 
     @Basic
+    @Convert(converter = TimeConverter.class)
     @Column(name = "witsTime", nullable = false)
-    private String witsTime;
+    private LocalTime witsTime;
 
     @Basic
     @Column(name = "blockPosition", nullable = false)
@@ -58,8 +63,10 @@ public class WITSParameterEntity {
     public WITSParameterEntity(LocalDate witsDate, LocalTime witsTime,
                                double blockPosition, double bitDepth, double depth,
                                double hookLoad, double pressure) {
-        this.witsDate = witsDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        this.witsTime = witsTime.format(DateTimeFormatter.ISO_LOCAL_TIME);
+//        this.witsDate = witsDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+//        this.witsTime = witsTime.format(DateTimeFormatter.ISO_LOCAL_TIME);
+        this.witsDate = witsDate;
+        this.witsTime = witsTime;
         this.blockPosition = blockPosition;
         this.bitDepth = bitDepth;
         this.depth = depth;

@@ -1,25 +1,30 @@
-import connection.SIBReceiverServer;
-import connection.WITSReceivingClient;
+import check.PackageValidator;
+import clients.SimpleClient;
+import consoleControl.Operation;
+import dao.DaoImpl;
+import entities.ParameterEntity;
 import entities.SIBParameterEntity;
 import entities.WITSParameterEntity;
+import entity.Cached;
+import entity.Package;
 import entity.SIBParameter;
 import entity.WITSPackageTimeBased;
-import exceptions.DisconnectedException;
+import exceptions.BuildObjectException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hibernate.SessionFactory;
+import servers.SimpleServer;
+import service.Convertable;
 import service.SIBConverter;
 import service.WITSConverter;
 import services.SIBParameterRepository;
 import services.WITSParameterRepository;
 import utils.HibernateUtils;
 
-import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Properties;
-import java.util.Scanner;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Main {
@@ -30,132 +35,156 @@ public class Main {
     private static int witsServerPort;
     private static boolean isWriteSibData;
     private static boolean isWriteWitsData;
+    //    -----------------------------
+    static ExecutorService service = Executors.newCachedThreadPool();
+    static SessionFactory sessionFactory;
+    static SIBConverter sibConverter = new SIBConverter();
+    static WITSConverter witsConverter = new WITSConverter();
+    static SIBParameterRepository sibRepo;
+    static WITSParameterRepository witsRepo;
+    static DaoImpl<ParameterEntity> repo;
 
-    public static void main(String[] args) {
-        initialize();
+    //---------------------------
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
+//        initialize();
         Properties props = new Properties();
-        props.setProperty("hibernate.connection.url", "jdbc:sqlite:" + path);
+        sessionFactory = HibernateUtils.getSessionFactory(props);
+        sibRepo = new SIBParameterRepository(sessionFactory);
+        witsRepo = new WITSParameterRepository(sessionFactory);
+//        props.setProperty("hibernate.connection.url", "jdbc:sqlite:" + path);
 
-        try (SessionFactory sessionFactory = HibernateUtils.getSessionFactory(props)) {
-            log.debug("SessionFactory is created");
-            Runnable storeFromSR = () -> storeSIBData(sessionFactory);
-            Runnable storeFromWITS = () -> storeWITSData(sessionFactory);
+//        --------------------------------------------------
+        Operation op = new Operation();
+        new Thread(op).start();
 
-            ExecutorService executorService = Executors.newFixedThreadPool(2);
-            if (isWriteSibData)
-                executorService.execute(storeFromSR);
-            if (isWriteWitsData)
-                executorService.execute(storeFromWITS);
-            executorService.shutdown();
+        Callable<Cached> callableServers = () -> (SimpleServer) getNewParticipant(op.getServers());
+        Callable<Cached> callableClients = () -> (SimpleClient) getNewParticipant(op.getClients());
+        List<Callable<Cached>> callableList = List.of(callableServers, callableClients);
 
-            executorService.awaitTermination(10, TimeUnit.DAYS);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void validateSIBData(byte[] data) throws IllegalArgumentException {
-        if (data[0] != -56) {
-            log.error("Invalid data from SibReceiver client");
-            throw new IllegalArgumentException("Invalid data from SibReceiver client");
-        }
-    }
-
-    private static void validateWITSData(byte[] data) throws IllegalArgumentException {
-        if (data[0] != 38) {
-            log.error("Invalid data from WITS server");
-            throw new IllegalArgumentException("Invalid data from WITS server");
-        }
-    }
-
-    private static void storeSIBData(SessionFactory sessionFactory) {
-        log.debug("SIB data recording started");
-        SIBParameterRepository repository = new SIBParameterRepository(sessionFactory);
-        SIBConverter converter = new SIBConverter();
         while (true) {
-            try (SIBReceiverServer server = new SIBReceiverServer(5111)) {
-                log.debug("SibReceiver client is connected on port 5111");
-                validateSIBData(server.receiveBytes());
-                byte[] data;
-                while (true) {
-                    data = server.receiveBytes();
-                    SIBParameter parameter = converter.convert(data, SIBParameter.class);
-                    SIBParameterEntity p1 = new SIBParameterEntity(
-                            parameter.getParameterName(), parameter.getParameterData(),
-                            parameter.getQuality());
-                    lock.lock();
-                    repository.save(p1);
-                    log.debug("Sib record saved");
-                    lock.unlock();
-                }
-            } catch (DisconnectedException e) {
-                log.debug("SibReceiver client is disconnected", e);
-            } catch (IOException e) {
-                log.error("Sib client input stream read error", e);
-            }
+            Cached part = service.invokeAny(callableList);
+            Runnable task = () -> readCache(part);
+            service.submit(task);
         }
     }
 
-    private static void storeWITSData(SessionFactory sessionFactory) {
-        log.debug("WITS data recording started");
-        WITSParameterRepository repository = new WITSParameterRepository(sessionFactory);
-        WITSConverter converter = new WITSConverter();
-        while (true) {
-            try (WITSReceivingClient client = new WITSReceivingClient(witsServerIP, witsServerPort)) {
-                log.debug("Client connected to server " + witsServerIP + " on port " + witsServerPort);
-                validateWITSData(client.receiveBytes());
-                byte[] data;
-                while (true) {
-                    try {
-                        data = client.receiveBytes();
-                        WITSPackageTimeBased packageTimeBased = (WITSPackageTimeBased) converter
-                                .convert(data, WITSPackageTimeBased.class);
-                        WITSParameterEntity p1 = new WITSParameterEntity(
-                                packageTimeBased.getWitsDate(), packageTimeBased.getWitsTime(),
-                                packageTimeBased.getBlockPosition(), packageTimeBased.getBitDepth(),
-                                packageTimeBased.getDepth(), packageTimeBased.getHookLoad(),
-                                packageTimeBased.getPressure());
-                        lock.lock();
-                        repository.save(p1);
-                        log.debug("WITS record saved");
-                        lock.unlock();
-                    } catch (DisconnectedException e) {
-                        log.debug(e);
-                        log.debug("Try reconnect...");
-                        break;
-                    }
+    private static void readCache(Cached part) {
+        System.out.println("Start reading cache for " + part);
+        byte[] data;
+        while (!isStopped(part)) {
+            data = part.readAllCache();
+            try {
+                if (data.length == 0) {
+                    Thread.sleep(500);
+                    continue;
                 }
                 try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    lock.lock();
+                    save(data);
+                } catch (BuildObjectException e){
+                    System.err.println("Illegal data");
+                } finally {
+                    lock.unlock();
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
-                log.error("WITS server input stream read error", e);
-            } catch (Exception e) {
-                log.debug("Try reconnect...");
-            } catch (DisconnectedException e) {
+            } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
+        System.out.println("Reading cache stopped for " + part);
     }
 
-    private static void initialize() {
-        Scanner scanner = new Scanner(System.in);
-        System.out.println("Enter DB path:");
-        path = scanner.nextLine();
-        System.out.println("Write sib data? (y/n)");
-        isWriteSibData = scanner.nextLine().equals("y");
-        System.out.println("Write WITS data? (y/n)");
-        isWriteWitsData = scanner.nextLine().equals("y");
-        if (isWriteWitsData) {
-            System.out.println("Enter WITS server IP:");
-            witsServerIP = scanner.nextLine();
-            System.out.println("Enter WITS server port:");
-            witsServerPort = scanner.nextInt();
+    private static void save(byte[] data) throws BuildObjectException {
+        Class<? extends Package> clazz = PackageValidator.identify(data);
+        Convertable<Package> converter = (Convertable<Package>) PackageValidator.getPackageConverter(clazz);
+        Package p = converter.convert(data, clazz);
+        ParameterEntity entity = buildEntity(p);
+        if (entity instanceof SIBParameterEntity) {
+            sibRepo.save((SIBParameterEntity) entity);
+        } else  if (entity instanceof WITSParameterEntity)
+            witsRepo.save((WITSParameterEntity) entity);
+    }
+
+    private static void saveSibPackage(byte[] data) throws BuildObjectException {
+        SIBParameter parameter = sibConverter.convert(data, SIBParameter.class);
+        SIBParameterEntity p1 = new SIBParameterEntity(
+                parameter.getName(), parameter.getValue(),
+                parameter.getQuality());
+        sibRepo.save(p1);
+    }
+
+    private static void saveWitsTimeBased(byte[] data) throws BuildObjectException {
+        WITSPackageTimeBased packageTimeBased = (WITSPackageTimeBased) witsConverter
+                .convert(data, WITSPackageTimeBased.class);
+        WITSParameterEntity p1 = new WITSParameterEntity(
+                packageTimeBased.getWitsDate(), packageTimeBased.getWitsTime(),
+                packageTimeBased.getBlockPosition(), packageTimeBased.getBitDepth(),
+                packageTimeBased.getDepth(), packageTimeBased.getHookLoad(),
+                packageTimeBased.getPressure());
+        witsRepo.save(p1);
+    }
+
+    private static boolean isStopped(Cached part) {
+        if (part instanceof SimpleServer)
+            return ((SimpleServer) part).isStopped();
+        else return ((SimpleClient) part).isStopped();
+    }
+
+    private static Object getNewParticipant(LinkedBlockingQueue<?> participants) {
+        LinkedBlockingQueue<Object> list = new LinkedBlockingQueue<>(participants);
+        Object participant = null;
+        while (participant == null) {
+            try {
+                participant = participants.stream()
+                        .filter(part -> !list.contains(part))
+                        .findFirst()
+                        .orElse(null);
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                return null;
+            }
         }
-        log.debug("DB path: " + path + ", " + "WITS server IP: " + witsServerIP + ", " +
-                "WITS server port: " + witsServerPort);
+        return participant;
+    }
+
+    private static ParameterEntity getEntity(Class<? extends Package> packageClass){
+        if (packageClass.getSimpleName().equals("SIBParameter"))
+            return new SIBParameterEntity();
+        else if (packageClass.getSuperclass().getSimpleName().equals("WITSPackage"))
+            return new WITSParameterEntity();
+        else throw new IllegalArgumentException("Not valid input argument: " + packageClass);
+    }
+
+    private static ParameterEntity buildEntity(Package pack) throws BuildObjectException {
+        Class<? extends Package> packageClazz = pack.getClass();
+        ParameterEntity pe = getEntity(packageClazz);
+        Class<? extends ParameterEntity> parameterClazz = pe.getClass();
+        Field[] packageF = packageClazz.getDeclaredFields();
+        for (Field f : packageF) {
+            f.setAccessible(true);
+            String fieldName = f.getName();
+            Field ef;
+            try {
+                ef = parameterClazz.getDeclaredField(fieldName);
+                ef.setAccessible(true);
+                ef.set(pe, f.get(pack));
+            } catch (NoSuchFieldException e) {
+                throw new BuildObjectException("Invalid input argument: " + pack);
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
+            }
+        }
+        return pe;
+    }
+
+    private static DaoImpl<? extends ParameterEntity> getRepo(ParameterEntity entity){
+        if (entity instanceof SIBParameterEntity) {
+            if (sibRepo == null)
+                return new SIBParameterRepository(sessionFactory);
+            else return sibRepo;
+        } else if (entity instanceof WITSParameterEntity) {
+            if (witsRepo == null)
+                return new WITSParameterRepository(sessionFactory);
+            else return witsRepo;
+        } else throw new IllegalArgumentException("Not valid input argument: " + entity);
     }
 }
