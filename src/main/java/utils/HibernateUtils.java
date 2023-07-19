@@ -5,6 +5,7 @@ import entities.WITSParameterEntity;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 
+import java.util.List;
 import java.util.Properties;
 
 public class HibernateUtils {
@@ -23,5 +24,9 @@ public class HibernateUtils {
                     .buildSessionFactory();
             return sessionFactory;
         } else return sessionFactory;
+    }
+
+    private List<Class<?>> classes (){
+        return null;
     }
 }

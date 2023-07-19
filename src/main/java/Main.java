@@ -7,51 +7,39 @@ import entities.SIBParameterEntity;
 import entities.WITSParameterEntity;
 import entity.Cached;
 import entity.Package;
-import entity.SIBParameter;
-import entity.WITSPackageTimeBased;
 import exceptions.BuildObjectException;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.hibernate.SessionFactory;
 import servers.SimpleServer;
 import service.Convertable;
-import service.SIBConverter;
-import service.WITSConverter;
 import services.SIBParameterRepository;
 import services.WITSParameterRepository;
 import utils.HibernateUtils;
 
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Main {
-    private static final Logger log = LogManager.getLogger(Main.class);
     private static ReentrantLock lock = new ReentrantLock(true);
     private static String path;
-    private static String witsServerIP;
-    private static int witsServerPort;
-    private static boolean isWriteSibData;
-    private static boolean isWriteWitsData;
-    //    -----------------------------
     static ExecutorService service = Executors.newCachedThreadPool();
     static SessionFactory sessionFactory;
-    static SIBConverter sibConverter = new SIBConverter();
-    static WITSConverter witsConverter = new WITSConverter();
     static SIBParameterRepository sibRepo;
     static WITSParameterRepository witsRepo;
     static DaoImpl<ParameterEntity> repo;
 
     //---------------------------
     public static void main(String[] args) throws ExecutionException, InterruptedException {
-//        initialize();
         Properties props = new Properties();
+//        path = getPath(args[0]);
+//        props.setProperty("hibernate.connection.url", "jdbc:sqlite:" + path);
         sessionFactory = HibernateUtils.getSessionFactory(props);
         sibRepo = new SIBParameterRepository(sessionFactory);
         witsRepo = new WITSParameterRepository(sessionFactory);
-//        props.setProperty("hibernate.connection.url", "jdbc:sqlite:" + path);
 
 //        --------------------------------------------------
         Operation op = new Operation();
@@ -66,6 +54,12 @@ public class Main {
             Runnable task = () -> readCache(part);
             service.submit(task);
         }
+    }
+
+    private static String getPath(String arg) {
+        if (Files.exists(Paths.get(arg)))
+        return Paths.get(arg).toString();
+        else throw new IllegalArgumentException("Wrong path to database: " + arg);
     }
 
     private static void readCache(Cached part) {
@@ -102,25 +96,6 @@ public class Main {
             sibRepo.save((SIBParameterEntity) entity);
         } else  if (entity instanceof WITSParameterEntity)
             witsRepo.save((WITSParameterEntity) entity);
-    }
-
-    private static void saveSibPackage(byte[] data) throws BuildObjectException {
-        SIBParameter parameter = sibConverter.convert(data, SIBParameter.class);
-        SIBParameterEntity p1 = new SIBParameterEntity(
-                parameter.getName(), parameter.getValue(),
-                parameter.getQuality());
-        sibRepo.save(p1);
-    }
-
-    private static void saveWitsTimeBased(byte[] data) throws BuildObjectException {
-        WITSPackageTimeBased packageTimeBased = (WITSPackageTimeBased) witsConverter
-                .convert(data, WITSPackageTimeBased.class);
-        WITSParameterEntity p1 = new WITSParameterEntity(
-                packageTimeBased.getWitsDate(), packageTimeBased.getWitsTime(),
-                packageTimeBased.getBlockPosition(), packageTimeBased.getBitDepth(),
-                packageTimeBased.getDepth(), packageTimeBased.getHookLoad(),
-                packageTimeBased.getPressure());
-        witsRepo.save(p1);
     }
 
     private static boolean isStopped(Cached part) {
