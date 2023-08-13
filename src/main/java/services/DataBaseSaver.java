@@ -30,7 +30,7 @@ public class DataBaseSaver {
     }
 
     public void storeToDB(Cached part) {
-        System.out.println("Start stored cache for " + part);
+        log.info("Start stored cache for " + part);
         byte[] data;
         while (!isStopped(part)) {
             data = part.readAllCache();
@@ -43,7 +43,7 @@ public class DataBaseSaver {
                 try {
                     lock.lock();
                     save(data);
-                    log.debug("Data saved from " + part);
+                    log.info("Data saved from " + part);
                 } catch (BuildObjectException e) {
                     log.warn("Illegal data", e);
                 } finally {
