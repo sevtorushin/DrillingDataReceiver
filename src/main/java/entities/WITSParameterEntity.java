@@ -18,7 +18,7 @@ import java.time.LocalTime;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = false)
-public class WITSParameterEntity extends ParameterEntity{
+public class WITSParameterEntity implements ParameterEntity{
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -63,8 +63,6 @@ public class WITSParameterEntity extends ParameterEntity{
     public WITSParameterEntity(LocalDate witsDate, LocalTime witsTime,
                                double blockPosition, double bitDepth, double depth,
                                double hookLoad, double pressure) {
-//        this.witsDate = witsDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
-//        this.witsTime = witsTime.format(DateTimeFormatter.ISO_LOCAL_TIME);
         this.witsDate = witsDate;
         this.witsTime = witsTime;
         this.blockPosition = blockPosition;
